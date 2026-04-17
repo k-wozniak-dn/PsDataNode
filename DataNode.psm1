@@ -1,8 +1,6 @@
 
 #region load_dlls
-$moduleRoot = $PSScriptRoot
-$DataNodeCorePath = Join-Path $moduleRoot 'DataNode.Core.dll'
-Add-Type -Path $DataNodeCorePath
+Add-Type -Path (Join-Path $PSScriptRoot 'DataNode.Core.dll')
 #endregion
 
 #region const
@@ -10,451 +8,262 @@ enum FileFormat {psd1; json; xml; csv; }
 
 #endregion
 
-#region node
+#region item
 
-<#
-    .SYNOPSIS
-    Get one or all attributes or system attributes from node. Outputs collection of PSCstomObjects with properties:
-    Key, Value, System
-
-    .PARAMETER Node
-    Source node.
-
-    .PARAMETER Key
-    Attribute key.
-
-    .PARAMETER System
-    Switch, if used, system attributes are searched for a key.
-
-    .PARAMETER All
-    Switch, if used collection of all attributes is returned.
-
-    .EXAMPLE
-    PS> $node =  nnode -NodeName "child-A"
-    PS> $node | gattr -All -System
-
-    Key         Value   System
-    ---         -----   ------
-    NodeName    child-A True
-    Idx         0       True
-    NextChildId 1       True
-
-#>
-
-# function Get-Attribute {
-#     [CmdletBinding(DefaultParameterSetName="Single")]
-#     [OutputType([PsCustomObject], ParameterSetName="Single")]
-#     [OutputType([PsCustomObject], ParameterSetName="All")]
-
-#     param (
-#         [Parameter(ParameterSetName = 'Single')]
-#         [Parameter(ParameterSetName = 'All')]
-#         [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [hashtable] $Node,
-
-#         [Parameter(ParameterSetName = 'Single')]
-#         [Parameter(Mandatory = $false)] [string] $Key,
-
-#         [Parameter(ParameterSetName = 'All')]
-#         [switch] $All,
-
-#         [Parameter(ParameterSetName = 'Single')]
-#         [Parameter(ParameterSetName = 'All')]
-#         [switch] $System
-#     )
-
-#     if ($All) { 
-#         if ($System) {
-#             foreach ($akey in $Node[$SA].Keys) 
-#             { 
-#                 [PSCustomObject] @{ Key = $akey; Value = $Node[$SA][$akey]; System = $true } | Write-Output ; 
-#             }            
-#         }
-#         else {
-#             foreach ($akey in $Node[$A].Keys) 
-#             { 
-#                 [PSCustomObject] @{ Key = $akey; Value = $Node[$A][$akey]; System = $false  } | Write-Output; 
-#             }    
-#         }
-#     }
-#     else { 
-#         if ($System) {
-#             if ($Node[$SA].ContainsKey($Key)) 
-#             {
-#                 [PSCustomObject] @{ Key = $Key; Value = $Node[$SA][$Key]; System = $true  } | Write-Output ;     
-#             }
-#         }
-#         else {
-#             if ($Node[$A].ContainsKey($Key)) 
-#             {
-#                 [PSCustomObject] @{ Key = $Key; Value = $Node[$A][$Key]; System = $false  } | Write-Output ; 
-#             }
-#         } 
-#     }
-# }
-# Set-Alias -Name:gattr -Value:Get-Attribute
-# Export-ModuleMember -Function:Get-Attribute
-# Export-ModuleMember -Alias:gattr
-
-<#
-    .SYNOPSIS
-    Get attribute value.
-
-    .PARAMETER Node
-    Source node.
-
-    .PARAMETER Key
-    Attribute key.
-
-    .PARAMETER System
-    Switch, if used, system attributes are searched for a key.
-
-    .EXAMPLE
-    PS> $node =  nnode -NodeName "child-A"
-    PS> Set-AttributeValue -Node:$node -Key:"Normal" -Value:"I'm attr."
-    PS> gattrv -N:$node -K:"Normal"
-
-    I'm attr.
-
-#>
-
-# function Get-AttributeValue {
-#     [CmdletBinding(DefaultParameterSetName="Default")]
-#     [OutputType([System.Object], ParameterSetName="Default")]
-
-#     param (
-#         [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [hashtable] $Node,
-
-#         [Parameter(Mandatory = $true)] [string] $Key,
-
-#         [switch] $System
-#     )
-
-#     [PSCustomObject] $attr = $System ? (Get-Attribute -Node:$Node -Key:$Key -System) : (Get-Attribute -Node:$Node -Key:$Key);
-#     if ($attr) { return $attr.Value; }
-# }
-# Set-Alias -Name:gattrv -Value:Get-AttributeValue
-# Export-ModuleMember -Function:Get-AttributeValue
-# Export-ModuleMember -Alias:gattrv
-
-<#
-    .SYNOPSIS
-    Validates attribute.
-
-    .PARAMETER Node
-    Used in scenarios when we need to compare with other attributes in the node.
-
-    .PARAMETER AttributeInfo
-    [PSCustomObject] with Key, Value, System.
-
-    .EXAMPLE
-    PS> $node =  nnode -NodeName "child-A"
-    PS> gattr -N:$node -A -S | Test-Attribute
-
-    Key         Value   System
-    ---         -----   ------
-    NodeName    child-A True
-    Idx         0       True
-    NextChildId 1       True
-    
-#>
-# function Test-Attribute {
-#     [CmdletBinding(DefaultParameterSetName="Default")]
-#     [OutputType([PSCustomObject], ParameterSetName="Default")]
-
-#     param (
-#         [Parameter(Mandatory = $false)] [hashtable] $Node,
-
-#         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] [PSCustomObject] $AttributeInfo
-#     )
-
-#     Process { 
-#         if ( -not (
-#                 ($AttributeInfo.Value -is [string]) -or 
-#                 ($AttributeInfo.Value -is [int]) -or 
-#                 ($AttributeInfo.Value -is [double]) -or 
-#                 ($AttributeInfo.Value -is [bool]))) { throw "Attribute value type not allowed." }
-
-#         if ($AttributeInfo.System) 
-#         { 
-#             if (-not $sysAttr.Contains([SysAttrKey]$AttributeInfo.Key)) { throw "System Attribute Key not allowed." } 
-
-#             if ([SysAttrKey]::NodeName -eq [SysAttrKey]$AttributeInfo.Key) {
-#                 if ($AttributeInfo.Value -match '^[0-9]') { throw "Incorrect NodeName value." };
-#                 if ($AttributeInfo.Value.Contains($pdel)) { throw "Node name can't contain path delimiter." }
-#             }
-#         }
-#         else {
-
-#         }
-
-#         $AttributeInfo | Write-Output;
-#     }
-# }
-# Set-Alias -Name:tattr -Value:Test-Attribute
-# Export-ModuleMember -Function:Test-Attribute
-# Export-ModuleMember -Alias:tattr
-
-<#
-    .SYNOPSIS
-    Creates AttributeInfo object.
-
-    .PARAMETER Key
-
-    .PARAMETER Value
-
-    .PARAMETER System
-    Switch on for system attributes.
-
-    .EXAMPLE
-    PS> nattr -K:"Price" -V:999.99 | Test-Attribute
-
-    Key         Value   System
-    ---         -----   ------
-    Price       999,99  False
-
-    
-#>
-
-# function New-Attribute {
-#     [CmdletBinding(DefaultParameterSetName="Default")]
-#     [OutputType([PSCustomObject], ParameterSetName="Default")]
-
-#     param (
-#         [Parameter(Mandatory = $true)] [string] $Key,
-
-#         [Parameter(Mandatory = $true)] [object] $Value,
-
-#         [switch] $System
-#     )
-
-#     return [PSCustomObject]@{ Key = $Key; Value = $Value; System = $System } ; 
-# }
-# Set-Alias -Name:nattr -Value:New-Attribute
-# Export-ModuleMember -Function:New-Attribute
-# Export-ModuleMember -Alias:nattr
-
-<#
-    .SYNOPSIS
-    Sets node with key and value contained in AttributeInfo object.
-
-    .PARAMETER Node
-
-    .PARAMETER AttributeInfo
-
-    .PARAMETER PassThru
-    Sends AttributeInfo object to output stream.
-
-    .EXAMPLE
-    PS> $node = nnode -NodeName "child-A";
-    PS> nattr -K:"Price" -V:999.99 | sattr -Node:$node -PassThru
-
-    Key         Value   System
-    ---         -----   ------
-    Price       999,99  False
-
-#>
-
-function Set-Attribute {
-    [CmdletBinding()]
-    [OutputType([DataNode.Core.DataNode])]
+function New-DataNodeItem {
+    [CmdletBinding(DefaultParameterSetName="Default")]
+    [OutputType([DataNode.Core.Item], ParameterSetName="Default")]
 
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.DataNode] $DataNode,
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string] $Key,
 
-        [Parameter(ParameterSetName = 'KeyAttribute')]
-        [Parameter(Mandatory = $false)] [string] $Key,
+        [Parameter(Mandatory = $false, Position = 1)]
+        [DataNode.Core.DataNode] $Parent = $null,
 
-        [Parameter(ParameterSetName = 'IndexAttribute')]
-        [Parameter(Mandatory = $false)] [int] $Index,
-
-        [Parameter(ParameterSetName = 'KeyAttribute')]
-        [Parameter(ParameterSetName = 'IndexAttribute')]
-        [Parameter(Mandatory = $false)] [string] $Attribute,
-
-        [Parameter(ParameterSetName = 'KeyAttribute')]
-        [Parameter(ParameterSetName = 'IndexAttribute')]
-        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
-        [Parameter(Mandatory = $false)] [object]$Value
+        [Parameter(Mandatory = $false, Position = 2, ParameterSetName = 'Copy')]
+        [DataNode.Core.Item] $CopyFrom
     )
 
-    Begin {
+    
+    switch ($PSCmdlet.ParameterSetName) {
+        'Default' {
+            return [DataNode.Core.Item]::new($Key, $Parent);
+            break
+        }
+        'Copy' {
+            return $CopyFrom.Copy($Key, $Parent);
+            break
+        }
     }
+}
+
+Set-Alias -Name:ndni -Value:New-DataNodeItem
+Export-ModuleMember -Function:New-DataNodeItem
+Export-ModuleMember -Alias:ndni
+
+function Get-Attribute {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.Item] $Item,
+
+        [Parameter(ParameterSetName = 'Name')] 
+        [Alias('Name')]
+        [Parameter(Mandatory = $false, Position = 0)] [string] $AttributeName
+
+    )
 
     Process
     { 
         switch ($PSCmdlet.ParameterSetName) {
-            'KeyAttribute' {
-                $attributes = $DataNode.GetOrCreate($Key);
-                $attributes.Set($Attribute, $Value);
+            'Default' {
+                $dict = [System.Collections.Generic.Dictionary[string, object]]::new()
+                foreach ($key in $Item.Attributes.Keys) { $dict[$key] = $Item.Attributes[$key].Value; }
+                return $dict;
                 break
-            }            
-            'IndexAttribute' {
-                $attributes = $DataNode.GetOrCreate($Index);
-                $attributes.Set($Attribute, $Value);
+            }
+            'Name' {
+                return $Item.Get($Key, $AttributeName).Value;
                 break
             }
         }
-
-        Write-Output $DataNode;
     }
 }
 
-Set-Alias -Name:sattr -Value:Set-Attribute
+Set-Alias -Name:geta -Value:Get-Attribute
+Export-ModuleMember -Function:Get-Attribute
+Export-ModuleMember -Alias:geta
+
+function Set-Attribute {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+    [OutputType([DataNode.Core.Item])]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.Item] $Item,
+
+        [Parameter(ParameterSetName = 'Default')]
+        [Parameter(Mandatory = $false)] [System.Collections.Generic.Dictionary[string, object]] $All,
+
+        [Parameter(ParameterSetName = 'Hashtable')]
+        [Parameter(Mandatory = $false)] [hashtable] $HashtableAll,
+
+        [Parameter(ParameterSetName = 'Name')]
+        [Alias('Name')]
+        [Parameter(Mandatory = $false, Position = 0)] [string] $AttributeName,
+
+        [Parameter(ParameterSetName = 'Name', Position = 1)]
+        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
+        [Parameter(Mandatory = $false)] [object]$Value,
+
+        [switch] $ExistingOnly = $false
+    )
+
+    Process
+    { 
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                return $Item.SetAll($All, $ExistingOnly);
+                break
+            }
+            'Hashtable' {
+                $dict = [System.Collections.Generic.Dictionary[string, object]]::new()
+                foreach ($key in $HashtableAll.Keys) { $dict[$key] = $HashtableAll[$key]; }
+                return $Item.SetAll($dict, $ExistingOnly);
+                break
+            }
+            'Name' {
+                return $Item.Set($AttributeName, $Value, $ExistingOnly);
+                break
+            }            
+        }
+    }
+}
+
+Set-Alias -Name:seta -Value:Set-Attribute
 Export-ModuleMember -Function:Set-Attribute
-Export-ModuleMember -Alias:sattr
+Export-ModuleMember -Alias:seta
 
-<#
-    .SYNOPSIS
-    Combines New-Attribute, Test-Attribute and Set-Attribute.
+function Add-Attribute {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+    [OutputType([DataNode.Core.Item])]
 
-    .PARAMETER Node
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.Item] $Item,
 
-    .PARAMETER Key
+        [Parameter(ParameterSetName = 'Default')]
+        [Parameter(Mandatory = $false)] [System.Collections.Generic.Dictionary[string, object]] $All,
 
-    .PARAMETER Value
+        [Parameter(ParameterSetName = 'Hashtable')]
+        [Parameter(Mandatory = $false)] [hashtable] $HashtableAll,
 
-    .PARAMETER System
+        [Parameter(ParameterSetName = 'Name')]
+        [Alias('Name')]
+        [Parameter(Mandatory = $false, Position = 0)] [string] $AttributeName,
 
-    .PARAMETER PassThru
-    Sends AttributeInfo object to output stream.
+        [Parameter(ParameterSetName = 'Name', Position = 1)]
+        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
+        [Parameter(Mandatory = $false)] [object]$Value
 
-    .EXAMPLE
-    PS> $node = nnode -NodeName "child-A";
-    PS> sattrv -N:$node -K:"Price" -V:999.99 -PassThru
+    )
 
-    Key         Value   System
-    ---         -----   ------
-    Price       999,99  False
+    Process
+    { 
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                return $Item.AddAll($All);
+                break
+            }
+            'Hashtable' {
+                $dict = [System.Collections.Generic.Dictionary[string, object]]::new()
+                foreach ($key in $HashtableAll.Keys) { $dict[$key] = $HashtableAll[$key]; }
+                return $Item.AddAll($dict);
+                break
+            }
+            'Name' {
+                return $Item.Add($AttributeName, $Value);
+                break
+            }            
+        }
+    }
+}
 
-#>
-# function Set-AttributeValue {
-#     [CmdletBinding(DefaultParameterSetName="Default")]
-#     [OutputType([PSCustomObject], ParameterSetName="Default")]
+Set-Alias -Name:adda -Value:Add-Attribute
+Export-ModuleMember -Function:Add-Attribute
+Export-ModuleMember -Alias:adda
+
+
+function Remove-Attribute {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+    [OutputType([DataNode.Core.Item])]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.Item] $Item,
+
+        [Alias('Name')]
+        [Parameter(Mandatory = $true, Position = 0)] [string] $AttributeName
+
+    )
+
+    Process
+    { 
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                return $Item.Remove($AttributeName);
+                break
+            }            
+        }
+    }
+}
+
+Set-Alias -Name:rma -Value:Remove-Attribute
+Export-ModuleMember -Function:Remove-Attribute
+Export-ModuleMember -Alias:rma
+
+#endregion
+
+#region node
+
+
+
+
+
+
+# function Set-Index {
+#     [CmdletBinding(DefaultParameterSetName='Default')]
+#     [OutputType([DataNode.Core.DataNode])]
 
 #     param (
-#         [Parameter(Mandatory = $true)] [hashtable] $Node,
+#         [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.DataNode] $DataNode,
 
-#         [Parameter(Mandatory = $true)] [string] $Key,
+#         [Parameter(Mandatory = $true)] [int] $Index,
 
-#         [Parameter(Mandatory = $true)] [object] $Value,
+#         [Parameter(ParameterSetName = 'Default')]
+#         [Parameter(Mandatory = $false)] [DataNode.Core.Attributes] $AllAttributes,
 
-#         [switch] $System,
+#         [Parameter(ParameterSetName = 'Name')]
+#         [Parameter(Mandatory = $false)] [string] $Name,
 
-#         [switch] $PassThru
-#     )
-
-#     New-Attribute -Key:$Key -Value:$Value -System:$System |
-#     Test-Attribute -Node:$Node |
-#     Set-Attribute -Node:$Node -PassThru:$PassThru;
-# }
-# Set-Alias -Name:sattrv -Value:Set-AttributeValue
-# Export-ModuleMember -Function:Set-AttributeValue
-# Export-ModuleMember -Alias:sattrv
-
-<#
-    .SYNOPSIS
-    Removes attribute(s) from node. Attribute to remove can be passed as AttributeInfo objects in pipe or by Key.
-    System attributes can't be removed.
-
-    .PARAMETER Node
-
-    .PARAMETER AttributeInfo
-
-    .PARAMETER Key
-
-    .PARAMETER PassThru
-    Pass removed AttributeInfo object(s) to output stream.
-
-    .EXAMPLE
-    PS> $node = nnode -NodeName "child-A";
-    PS> nattr -K:"Price" -V:999.99 | sattr -Node:$node;
-    PS> #   remove all attributes from node with PassThru
-    PS> gattr -N:$node -A | rattr -N:$node -P
-
-    Key         Value   System
-    ---         -----   ------
-    Price       999,99  False
-
-    .EXAMPLE
-    PS> $node = nnode -NodeName "child-A";
-    PS> nattr -K:"Price" -V:999.99 | sattr -Node:$node;
-    PS> #   remove selected attribute from node with PassThru
-    PS>  rattr -N:$node -K:"Price" -P
-
-    Key         Value   System
-    ---         -----   ------
-    Price       999,99  False
-
-#>
-# function Remove-Attribute {
-#     [CmdletBinding(DefaultParameterSetName="Pipe")]
-#     [OutputType([PSCustomObject], ParameterSetName="Pipe")]
-#     [OutputType([PSCustomObject], ParameterSetName="Key")]
-
-#     param (
-#         [Parameter(ParameterSetName = 'Pipe')]
-#         [Parameter(ParameterSetName = 'Key')]
-#         [Parameter(Mandatory = $true)] [hashtable] $Node,
-
-#         [Parameter(ParameterSetName = 'Pipe')]
-#         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] [PSCustomObject] $AttributeInfo,
-
-#         [Parameter(ParameterSetName = 'Key')]
-#         [Parameter(Mandatory = $false)] [string] $Key,
-
-#         [Parameter(ParameterSetName = 'Pipe')]
-#         [Parameter(ParameterSetName = 'Key')]
-#         [switch] $PassThru
+#         [Parameter(ParameterSetName = 'Name')]
+#         [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
+#         [Parameter(Mandatory = $false)] [object]$Value
 #     )
 
 #     Begin {
-#         [PSCustomObject[]] $toRemove = @();
-
-#         if ($Key) {
-#             $toRemove += (Get-Attribute -Node:$Node -Key:$Key);
-#         }
 #     }
 
 #     Process
 #     { 
-#         if ($AttributeInfo) {
-#             $toRemove += $AttributeInfo;            
-#         }
-#     }
-
-#     End {
-#         foreach ($ai in $toRemove) {
-#             if ($ai.System) {
-#                 Write-Error "Removing system attributes not allowed.";
-#                 # $Node[$SA].Remove($AttributeInfo.Key); 
+#         switch ($PSCmdlet.ParameterSetName) {
+#             'Default' {
+#                 $attributes = $AllAttributes.Copy($DataNode);
+#                 $DataNode.Set($Index, $attributes);
+#                 break
 #             }
-#             else {
-#                 $Node[$A].Remove($ai.Key); 
+#             'Name' {
+#                 $attributes = $DataNode.Get($Index);
+#                 if ($attributes) { $attributes.Set($Name, $Value); }
+#                 else { throw "Attributes not found for the index."; }
+#                 break
 #             }
-
-#             if ($PassThru) { $ai | Write-Output; }            
 #         }
+
+#         Write-Output $DataNode;
 #     }
 # }
-# Set-Alias -Name:rattr -Value:Remove-Attribute
-# Export-ModuleMember -Function:Remove-Attribute
-# Export-ModuleMember -Alias:rattr
+
+# Set-Alias -Name:sidx -Value:Set-Index
+# Export-ModuleMember -Function:Set-Index
+# Export-ModuleMember -Alias:sidx
+
 
 <#
     .SYNOPSIS
     Creates new node and sets initial system attributes.
 
-    .PARAMETER NodeName
+    .PARAMETER Name
 
     .EXAMPLE
-    PS> $node = nnode -NodeName "child-A";
-    PS> gattr -N:$node -A -S
-
-    Key         Value   System
-    ---         -----   ------
-    NodeName    child-A True
-    Idx         0       True
-    NextChildId 1       True
 
 #>
 function New-DataNode {
@@ -462,7 +271,7 @@ function New-DataNode {
     [OutputType([hashtable], ParameterSetName="Default")]
 
     param (
-        [string] $NodeName
+        [string] $Name
     )
 
     $dn = [DataNode.Core.DataNode]::new();
