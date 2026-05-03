@@ -10,106 +10,185 @@ enum FileFormat {psd1; json; xml; csv; }
 
 #region item
 
-function New-DataNodeItem {
+function New-dnAttribute {
+    [CmdletBinding(DefaultParameterSetName="Default")]
+    [OutputType([DataNode.Core.Attribute], ParameterSetName="Default")]
+
+    param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string] $Name,
+
+        [Parameter(Mandatory = $true, Position = 1)]
+        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
+        [object]$Value
+    )
+
+    switch ($PSCmdlet.ParameterSetName) {
+        'Default' {
+            return [DataNode.Core.Attribute]::new($Name, $Value);
+            break
+        }
+    }
+}
+
+Set-Alias -Name:ndna -Value:New-dnAttribute
+Export-ModuleMember -Function:New-dnAttribute
+Export-ModuleMember -Alias:ndna
+
+function New-dnItem {
     [CmdletBinding(DefaultParameterSetName="Default")]
     [OutputType([DataNode.Core.Item], ParameterSetName="Default")]
 
     param (
+        [Parameter(ParameterSetName = 'Default')]
+        [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
+        [DataNode.Core.Attribute] $Attribute,
+
+        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $true, Position = 0)]
-        [string] $Key,
-
-        [Parameter(Mandatory = $false, Position = 1)]
-        [DataNode.Core.DataNode] $Parent = $null,
-
-        [Parameter(Mandatory = $false, Position = 2, ParameterSetName = 'Copy')]
-        [DataNode.Core.Item] $CopyFrom
+        [string] $Key
     )
 
+    begin {
+        $attributes = New-Object 'System.Collections.Generic.List[DataNode.Core.Attribute]'
+    }
     
-    switch ($PSCmdlet.ParameterSetName) {
-        'Default' {
-            return [DataNode.Core.Item]::new($Key, $Parent);
-            break
+    process {
+        if ($Attribute) {
+            $attributes.Add($Attribute);
         }
-        'Copy' {
-            return $CopyFrom.Copy($Key, $Parent);
-            break
-        }
+    }
+
+    end {
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                return [DataNode.Core.Item]::new($attributes, $Key, $null);
+                break
+            }
+        }        
     }
 }
 
-Set-Alias -Name:ndni -Value:New-DataNodeItem
-Export-ModuleMember -Function:New-DataNodeItem
+Set-Alias -Name:ndni -Value:New-dnItem
+Export-ModuleMember -Function:New-dnItem
 Export-ModuleMember -Alias:ndni
 
-function Get-Attribute {
+function Copy-dnItem {
+    [CmdletBinding(DefaultParameterSetName="Default")]
+    [OutputType([DataNode.Core.Item], ParameterSetName="Default")]
+
+    param (
+        [Parameter(Mandatory = $false, Position = 0)]
+        [DataNode.Core.Item] $From,
+
+        [Parameter(Mandatory = $false, Position = 1)]
+        [string] $Key
+    )
+
+    begin {
+    }
+    
+    process {
+    }
+
+    end {
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                return $From.Copy($Key);
+                break
+            }
+        }        
+    }
+}
+
+Set-Alias -Name:cpdni -Value:Copy-dnItem
+Export-ModuleMember -Function:Copy-dnItem
+Export-ModuleMember -Alias:cpdni
+
+function Get-dnAttribute {
     [CmdletBinding(DefaultParameterSetName='Default')]
+    [OutputType([DataNode.Core.Attribute], ParameterSetName="Default")]
+    [OutputType([DataNode.Core.Attribute], ParameterSetName="All")]
 
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.Item] $Item,
 
-        [Parameter(ParameterSetName = 'Name')] 
         [Alias('Name')]
-        [Parameter(Mandatory = $false, Position = 0)] [string] $AttributeName
+        [Parameter(Mandatory = $false, Position = 0)] [string[]] $AttributeName,
 
+        [Parameter(Mandatory = $false, Position = 1)]
+        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
+        [object]$DefaultValue,
+
+        [Parameter(ParameterSetName = 'All')]
+        [switch] $All
     )
 
     Process
     { 
         switch ($PSCmdlet.ParameterSetName) {
             'Default' {
-                $dict = [System.Collections.Generic.Dictionary[string, object]]::new()
-                foreach ($key in $Item.Attributes.Keys) { $dict[$key] = $Item.Attributes[$key].Value; }
-                return $dict;
+                foreach ($name in $AttributeName) 
+                {
+                    $attribute = ($null -eq $DefaultValue) ? 
+                        $Item.Get($name) : 
+                        $Item.GetOrDefault($name, $DefaultValue);
+                    $attribute | Write-Output;                    
+                }
                 break
             }
-            'Name' {
-                return $Item.Get($Key, $AttributeName).Value;
+            'All' {
+                $Item.GetAll() | Write-Output;
                 break
             }
         }
     }
 }
 
-Set-Alias -Name:geta -Value:Get-Attribute
-Export-ModuleMember -Function:Get-Attribute
-Export-ModuleMember -Alias:geta
+Set-Alias -Name:gdna -Value:Get-dnAttribute
+Export-ModuleMember -Function:Get-dnAttribute
+Export-ModuleMember -Alias:gdna
 
-function Set-Attribute {
+function Set-dnAttribute {
     [CmdletBinding(DefaultParameterSetName='Default')]
-    [OutputType([DataNode.Core.Item])]
+    [OutputType([DataNode.Core.Attribute])]
 
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.Item] $Item,
-
         [Parameter(ParameterSetName = 'Default')]
-        [Parameter(Mandatory = $false)] [System.Collections.Generic.Dictionary[string, object]] $All,
+        [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
+        [DataNode.Core.Attribute] $Attribute,
 
-        [Parameter(ParameterSetName = 'Hashtable')]
-        [Parameter(Mandatory = $false)] [hashtable] $HashtableAll,
+        [Parameter(Mandatory = $true, Position = 0)] 
+        [DataNode.Core.Item] $Item,
 
         [Parameter(ParameterSetName = 'Name')]
         [Alias('Name')]
-        [Parameter(Mandatory = $false, Position = 0)] [string] $AttributeName,
+        [Parameter(Mandatory = $false, Position = 1)] 
+        [string] $AttributeName,
 
-        [Parameter(ParameterSetName = 'Name', Position = 1)]
-        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
-        [Parameter(Mandatory = $false)] [object]$Value,
+        [Parameter(ParameterSetName = 'Name')]
+        [Parameter(Mandatory = $false, Position = 2)] 
+        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]        
+        [object]$Value,
 
-        [switch] $ExistingOnly = $false
+        [Parameter(ParameterSetName = 'Default')]
+        [Parameter(ParameterSetName = 'Name')]
+        [switch] $ExistingOnly
     )
 
-    Process
-    { 
+    begin {
+        $attributes = New-Object 'System.Collections.Generic.List[DataNode.Core.Attribute]'
+    }
+    process {
+        if ($Attribute) {
+            $attributes.Add($Attribute);
+        }
+    }
+    end 
+    {
         switch ($PSCmdlet.ParameterSetName) {
             'Default' {
-                return $Item.SetAll($All, $ExistingOnly);
-                break
-            }
-            'Hashtable' {
-                $dict = [System.Collections.Generic.Dictionary[string, object]]::new()
-                foreach ($key in $HashtableAll.Keys) { $dict[$key] = $HashtableAll[$key]; }
-                return $Item.SetAll($dict, $ExistingOnly);
+                return $Item.SetAll($attributes, $ExistingOnly);
                 break
             }
             'Name' {
@@ -120,68 +199,146 @@ function Set-Attribute {
     }
 }
 
-Set-Alias -Name:seta -Value:Set-Attribute
-Export-ModuleMember -Function:Set-Attribute
-Export-ModuleMember -Alias:seta
+Set-Alias -Name:sdna -Value:Set-dnAttribute
+Export-ModuleMember -Function:Set-dnAttribute
+Export-ModuleMember -Alias:sdna
 
-function Add-Attribute {
+function Add-dnAttribute {
     [CmdletBinding(DefaultParameterSetName='Default')]
-    [OutputType([DataNode.Core.Item])]
+    [OutputType([DataNode.Core.Attribute])]
 
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.Item] $Item,
-
         [Parameter(ParameterSetName = 'Default')]
-        [Parameter(Mandatory = $false)] [System.Collections.Generic.Dictionary[string, object]] $All,
+        [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
+        [DataNode.Core.Attribute] $Attribute,
 
-        [Parameter(ParameterSetName = 'Hashtable')]
-        [Parameter(Mandatory = $false)] [hashtable] $HashtableAll,
+        [Parameter(Mandatory = $true, Position = 0)] 
+        [DataNode.Core.Item] $Item,
 
         [Parameter(ParameterSetName = 'Name')]
         [Alias('Name')]
-        [Parameter(Mandatory = $false, Position = 0)] [string] $AttributeName,
+        [Parameter(Mandatory = $false, Position = 1)] 
+        [string] $AttributeName,
 
-        [Parameter(ParameterSetName = 'Name', Position = 1)]
-        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
-        [Parameter(Mandatory = $false)] [object]$Value
-
+        [Parameter(ParameterSetName = 'Name')]
+        [Parameter(Mandatory = $false, Position = 2)] 
+        [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]        
+        [object]$Value
     )
 
-    Process
-    { 
+    begin {
+        $attributes = New-Object 'System.Collections.Generic.List[DataNode.Core.Attribute]'
+    }
+    process {
+        if ($Attribute) {
+            $attributes.Add($Attribute);
+        }
+    }
+    end 
+    {
         switch ($PSCmdlet.ParameterSetName) {
             'Default' {
-                return $Item.AddAll($All);
-                break
-            }
-            'Hashtable' {
-                $dict = [System.Collections.Generic.Dictionary[string, object]]::new()
-                foreach ($key in $HashtableAll.Keys) { $dict[$key] = $HashtableAll[$key]; }
-                return $Item.AddAll($dict);
+                return $Item.AddAll($attributes);
                 break
             }
             'Name' {
                 return $Item.Add($AttributeName, $Value);
                 break
-            }            
+            }
         }
     }
 }
 
-Set-Alias -Name:adda -Value:Add-Attribute
-Export-ModuleMember -Function:Add-Attribute
-Export-ModuleMember -Alias:adda
+Set-Alias -Name:adna -Value:Add-dnAttribute
+Export-ModuleMember -Function:Add-dnAttribute
+Export-ModuleMember -Alias:adna
 
-
-function Remove-Attribute {
+function Remove-dnAttribute {
     [CmdletBinding(DefaultParameterSetName='Default')]
-    [OutputType([DataNode.Core.Item])]
+    [OutputType([DataNode.Core.Attribute])]
 
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.Item] $Item,
+        [Parameter(ParameterSetName = 'Default')]
+        [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
+        [DataNode.Core.Attribute] $Attribute,
 
+        [Parameter(Mandatory = $true, Position = 0)] 
+        [DataNode.Core.Item] $Item,
+
+        [Parameter(ParameterSetName = 'Name')]
         [Alias('Name')]
-        [Parameter(Mandatory = $true, Position = 0)] [string] $AttributeName
+        [Parameter(Mandatory = $false, Position = 1)] 
+        [string[]] $AttributeName
+    )
+
+    begin {
+        $attributes = New-Object 'System.Collections.Generic.List[DataNode.Core.Attribute]'
+    }
+    process {
+        if ($Attribute) {
+            $attributes.Add($Attribute);
+        }
+    }
+    end 
+    {
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                return $Item.RemoveAll($attributes);
+                break
+            }
+            'Name' {
+                return $Item.RemoveAll($AttributeName);
+                break
+            }
+        }
+    }
+}
+
+Set-Alias -Name:rmdna -Value:Remove-dnAttribute
+Export-ModuleMember -Function:Remove-dnAttribute
+Export-ModuleMember -Alias:rmdna
+
+#endregion
+
+#region node
+
+function New-DataNode {
+    [CmdletBinding(DefaultParameterSetName = "Default")]
+    [OutputType([DataNode.Core.DataNode], ParameterSetName = "Default")]
+
+    param (
+        [Parameter(Mandatory = $false, ParameterSetName = 'Copy')]
+        [DataNode.Core.DataNode] $CopyFrom
+    )
+
+    switch ($PSCmdlet.ParameterSetName) {
+        'Default' {
+            return [DataNode.Core.DataNode]::new();
+            break
+        }
+        'Copy' {
+            return [DataNode.Core.DataNode]::Copy($CopyFrom);
+            break
+        }
+    }
+}
+Set-Alias -Name:ndn -Value:New-DataNode
+Export-ModuleMember -Function:New-DataNode
+Export-ModuleMember -Alias:ndn
+
+function Get-dnItem {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [Alias('DN', 'Node')]
+        [DataNode.Core.DataNode] $DataNode,
+
+        [Parameter(ParameterSetName = 'Key')] 
+        [Parameter(Mandatory = $false, Position = 0)] [string] $Key,
+
+        [Alias('Hashtable', 'Hash')]
+        [switch] $AsHashtable = $false
 
     )
 
@@ -189,103 +346,150 @@ function Remove-Attribute {
     { 
         switch ($PSCmdlet.ParameterSetName) {
             'Default' {
-                return $Item.Remove($AttributeName);
+                $dict = $AsHashtable ? @{} : [System.Collections.Generic.Dictionary[string, DataNode.Core.Item]]::new();
+                $all = $DataNode.Get();
+                foreach ($key in $all.Keys) 
+                    { $dict[$key] = ($AsHashtable ? (Get-Attribute -Item $all[$key] -AsHashtable) : $all[$key]); }
+                return $dict;
+                break
+            }
+            'Key' {
+                return $DataNode.Get($Key);
+                break
+            }
+        }
+    }
+}
+
+Set-Alias -Name:geti -Value:Get-dnItem
+Export-ModuleMember -Function:Get-dnItem
+Export-ModuleMember -Alias:geti
+
+function Set-dnItem {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+    [OutputType([DataNode.Core.DataNode])]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] 
+        [Alias('DN', 'Node')]
+        [DataNode.Core.DataNode] $DataNode,
+
+        [Parameter(ParameterSetName = 'Default')]
+        [Parameter(Mandatory = $false)] 
+        [System.Collections.Generic.Dictionary[string, DataNode.Core.Item]] $All,
+
+        [Parameter(ParameterSetName = 'Hashtable')]
+        [Parameter(Mandatory = $false)] 
+        [hashtable] $HashtableAll,
+
+        [Parameter(ParameterSetName = 'Item')]
+        [Parameter(Mandatory = $false, Position = 0)] 
+        [DataNode.Core.Item[]] $Item,
+
+        [switch] $ExistingOnly = $false
+    )
+
+    Process
+    { 
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                return $DataNode.SetAll($All, $ExistingOnly);
+                break
+            }
+            'Hashtable' {
+                $dict = [System.Collections.Generic.Dictionary[string, DataNode.Core.Item]]::new()
+                foreach ($key in $HashtableAll.Keys) 
+                    { $dict[$key] =  $HashtableAll[$key]; }
+                return $DataNode.SetAll($dict, $ExistingOnly);
+                break
+            }
+            'Item' {
+                foreach ($i in $Item) 
+                    { $DataNode.Set($i, $ExistingOnly) | Out-Null; }
+                return $DataNode;
+                break;
+            }
+        }
+    }   
+}
+
+Set-Alias -Name:seti -Value:Set-dnItem
+Export-ModuleMember -Function:Set-dnItem
+Export-ModuleMember -Alias:seti
+
+function Add-dnItem {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+    [OutputType([DataNode.Core.DataNode])]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.DataNode] $DataNode,
+
+        [Parameter(ParameterSetName = 'Default')]
+        [Parameter(Mandatory = $false)] [System.Collections.Generic.Dictionary[string, DataNode.Core.Item]] $All,
+
+        [Parameter(ParameterSetName = 'Hashtable')]
+        [Parameter(Mandatory = $false)] [hashtable] $HashtableAll,
+
+        [Parameter(ParameterSetName = 'Item', Position = 0)]
+        [Parameter(Mandatory = $false)] [DataNode.Core.Item[]] $Item
+
+    )
+
+    begin {
+        $ErrorActionPreference = 'Stop';
+    }
+
+    Process
+    { 
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                return $DataNode.AddAll($All);
+                break
+            }
+            'Hashtable' {
+                $dict = [System.Collections.Generic.Dictionary[string, DataNode.Core.Item]]::new()
+                foreach ($key in $HashtableAll.Keys) { $dict[$key] = $HashtableAll[$key]; }
+                return $DataNode.AddAll($dict);
+                break
+            }
+            'Item' {
+                foreach ($i in $Item) { $DataNode.Add($i) | Out-Null; }
+                return $DataNode;
+                break
+            }     
+        }
+    }
+}
+
+Set-Alias -Name:addi -Value:Add-dnItem
+Export-ModuleMember -Function:Add-dnItem
+Export-ModuleMember -Alias:addi
+
+function Remove-dnItem {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+    [OutputType([DataNode.Core.DataNode])]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.DataNode] $DataNode,
+
+        [Parameter(Mandatory = $true, Position = 0)] [string] $Key
+
+    )
+
+    Process
+    { 
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                $DataNode.Remove($Key);
                 break
             }            
         }
     }
 }
 
-Set-Alias -Name:rma -Value:Remove-Attribute
-Export-ModuleMember -Function:Remove-Attribute
-Export-ModuleMember -Alias:rma
-
-#endregion
-
-#region node
-
-
-
-
-
-
-# function Set-Index {
-#     [CmdletBinding(DefaultParameterSetName='Default')]
-#     [OutputType([DataNode.Core.DataNode])]
-
-#     param (
-#         [Parameter(Mandatory = $true, ValueFromPipeline = $true)] [DataNode.Core.DataNode] $DataNode,
-
-#         [Parameter(Mandatory = $true)] [int] $Index,
-
-#         [Parameter(ParameterSetName = 'Default')]
-#         [Parameter(Mandatory = $false)] [DataNode.Core.Attributes] $AllAttributes,
-
-#         [Parameter(ParameterSetName = 'Name')]
-#         [Parameter(Mandatory = $false)] [string] $Name,
-
-#         [Parameter(ParameterSetName = 'Name')]
-#         [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]
-#         [Parameter(Mandatory = $false)] [object]$Value
-#     )
-
-#     Begin {
-#     }
-
-#     Process
-#     { 
-#         switch ($PSCmdlet.ParameterSetName) {
-#             'Default' {
-#                 $attributes = $AllAttributes.Copy($DataNode);
-#                 $DataNode.Set($Index, $attributes);
-#                 break
-#             }
-#             'Name' {
-#                 $attributes = $DataNode.Get($Index);
-#                 if ($attributes) { $attributes.Set($Name, $Value); }
-#                 else { throw "Attributes not found for the index."; }
-#                 break
-#             }
-#         }
-
-#         Write-Output $DataNode;
-#     }
-# }
-
-# Set-Alias -Name:sidx -Value:Set-Index
-# Export-ModuleMember -Function:Set-Index
-# Export-ModuleMember -Alias:sidx
-
-
-<#
-    .SYNOPSIS
-    Creates new node and sets initial system attributes.
-
-    .PARAMETER Name
-
-    .EXAMPLE
-
-#>
-function New-DataNode {
-    [CmdletBinding(DefaultParameterSetName="Default")]
-    [OutputType([hashtable], ParameterSetName="Default")]
-
-    param (
-        [string] $Name
-    )
-
-    $dn = [DataNode.Core.DataNode]::new();
-
-    # if ($NodeName) { Set-AttributeValue -Node:$nn -Key:([SysAttrKey]::NodeName) -Value:$NodeName -System ;}
-    # Set-AttributeValue -Node:$nn -Key:([SysAttrKey]::NextChildId) -Value:1 -System ;
-    #   new node is not indexed until it's added to the tree
-    # Set-AttributeValue -Node:$nn -Key:([SysAttrKey]::Idx) -Value:-1 -System ;
-
-    return $dn;
-}
-Set-Alias -Name:ndn -Value:New-DataNode
-Export-ModuleMember -Function:New-DataNode
-Export-ModuleMember -Alias:ndn
+Set-Alias -Name:rmi -Value:Remove-dnItem
+Export-ModuleMember -Function:Remove-dnItem
+Export-ModuleMember -Alias:rmi
 
 #endregion
 
