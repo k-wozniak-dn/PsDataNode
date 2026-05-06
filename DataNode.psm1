@@ -1,4 +1,6 @@
 
+$script:ErrorActionPreference = 'Stop';
+
 #region load_dlls
 Add-Type -Path (Join-Path $PSScriptRoot 'DataNode.Core.dll')
 #endregion
@@ -40,11 +42,9 @@ function New-dnItem {
     [OutputType([DataNode.Core.Item], ParameterSetName="Default")]
 
     param (
-        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
         [DataNode.Core.Attribute] $Attribute,
 
-        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $true, Position = 0)]
         [string] $Key
     )
@@ -154,25 +154,24 @@ function Set-dnAttribute {
     [OutputType([DataNode.Core.Attribute])]
 
     param (
-        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
         [DataNode.Core.Attribute] $Attribute,
 
         [Parameter(Mandatory = $true, Position = 0)] 
         [DataNode.Core.Item] $Item,
 
-        [Parameter(ParameterSetName = 'Name')]
+        [Parameter(ParameterSetName = 'ByName')]
         [Alias('Name')]
         [Parameter(Mandatory = $false, Position = 1)] 
         [string] $AttributeName,
 
-        [Parameter(ParameterSetName = 'Name')]
+        [Parameter(ParameterSetName = 'ByName')]
         [Parameter(Mandatory = $false, Position = 2)] 
         [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]        
         [object]$Value,
 
         [Parameter(ParameterSetName = 'Default')]
-        [Parameter(ParameterSetName = 'Name')]
+        [Parameter(ParameterSetName = 'ByName')]
         [switch] $ExistingOnly
     )
 
@@ -191,7 +190,7 @@ function Set-dnAttribute {
                 return $Item.SetAll($attributes, $ExistingOnly);
                 break
             }
-            'Name' {
+            'ByName' {
                 return $Item.Set($AttributeName, $Value, $ExistingOnly);
                 break
             }            
@@ -208,19 +207,18 @@ function Add-dnAttribute {
     [OutputType([DataNode.Core.Attribute])]
 
     param (
-        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
         [DataNode.Core.Attribute] $Attribute,
 
         [Parameter(Mandatory = $true, Position = 0)] 
         [DataNode.Core.Item] $Item,
 
-        [Parameter(ParameterSetName = 'Name')]
+        [Parameter(ParameterSetName = 'ByName')]
         [Alias('Name')]
         [Parameter(Mandatory = $false, Position = 1)] 
         [string] $AttributeName,
 
-        [Parameter(ParameterSetName = 'Name')]
+        [Parameter(ParameterSetName = 'ByName')]
         [Parameter(Mandatory = $false, Position = 2)] 
         [ValidateScript({ $_ -is [string] -or $_ -is [int] -or $_ -is [decimal] })]        
         [object]$Value
@@ -241,7 +239,7 @@ function Add-dnAttribute {
                 return $Item.AddAll($attributes);
                 break
             }
-            'Name' {
+            'ByName' {
                 return $Item.Add($AttributeName, $Value);
                 break
             }
@@ -258,14 +256,13 @@ function Remove-dnAttribute {
     [OutputType([DataNode.Core.Attribute])]
 
     param (
-        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
         [DataNode.Core.Attribute] $Attribute,
 
         [Parameter(Mandatory = $true, Position = 0)] 
         [DataNode.Core.Item] $Item,
 
-        [Parameter(ParameterSetName = 'Name')]
+        [Parameter(ParameterSetName = 'ByName')]
         [Alias('Name')]
         [Parameter(Mandatory = $false, Position = 1)] 
         [string[]] $AttributeName
@@ -286,7 +283,7 @@ function Remove-dnAttribute {
                 return $Item.RemoveAll($attributes);
                 break
             }
-            'Name' {
+            'ByName' {
                 return $Item.RemoveAll($AttributeName);
                 break
             }
@@ -337,7 +334,7 @@ Export-ModuleMember -Alias:ndn
 
 function Copy-DataNode {
     [CmdletBinding(DefaultParameterSetName="Default")]
-    [OutputType([DataNode.Core.Item], ParameterSetName="Default")]
+    [OutputType([DataNode.Core.DataNode], ParameterSetName="Default")]
 
     param (
         [Parameter(Mandatory = $false, Position = 0)]
@@ -414,7 +411,6 @@ function Set-dnItem {
     [OutputType([DataNode.Core.Item])]
 
     param (
-        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
         [DataNode.Core.Item] $Item,
 
@@ -452,7 +448,6 @@ function Add-dnItem {
     [OutputType([DataNode.Core.Item])]
 
     param (
-        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
         [DataNode.Core.Item] $Item,
 
@@ -489,7 +484,6 @@ function Remove-dnItem {
     [OutputType([DataNode.Core.Item])]
 
     param (
-        [Parameter(ParameterSetName = 'Default')]
         [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
         [DataNode.Core.Item] $Item,
 
@@ -497,7 +491,7 @@ function Remove-dnItem {
         [Parameter(Mandatory = $true, Position = 0)] 
         [DataNode.Core.DataNode] $DataNode,
 
-        [Parameter(ParameterSetName = 'Key')]
+        [Parameter(ParameterSetName = 'ByKey')]
         [Parameter(Mandatory = $false, Position = 1)] 
         [string[]] $Key
     )
@@ -517,7 +511,7 @@ function Remove-dnItem {
                 return $DataNode.RemoveAll($items);
                 break
             }
-            'Key' {
+            'ByKey' {
                 return $DataNode.RemoveAll($Key);
                 break
             }
@@ -529,194 +523,131 @@ Set-Alias -Name:rmdni -Value:Remove-dnItem
 Export-ModuleMember -Function:Remove-dnItem
 Export-ModuleMember -Alias:rmdni
 
+enum MoveToIndexOption {start; end; }
+function Move-toDnIndex {
+    [CmdletBinding(DefaultParameterSetName='Default')]
+    [OutputType([DataNode.Core.Item])]
+
+    param (
+        [Parameter(Mandatory = $false, ValueFromPipeline = $true)] 
+        [DataNode.Core.Item] $Item,
+
+        [Alias('dn', 'Node')]
+        [Parameter(Mandatory = $true, Position = 0)] 
+        [DataNode.Core.DataNode] $DataNode,
+
+        [Alias('Offset', 'Idx')]
+        [Parameter(Mandatory = $false, Position = 1)]
+        [ValidateScript({ $_ -is [string] -or $_ -is [int] ;})]
+        [object] $IndexOffset
+    )
+
+    begin {
+        $items = New-Object 'System.Collections.Generic.List[DataNode.Core.Item]';
+    }
+    process {
+        if ($Item) {
+            $items.Add($Item);
+        }
+    }
+    end 
+    {
+        switch ($PSCmdlet.ParameterSetName) {
+            'Default' {
+                foreach($i in $items) {
+                    if ($IndexOffset -is [int])
+                    {
+                        $DataNode.Move($i, $IndexOffset) | Write-Output;
+                    }
+                    elseif ($IndexOffset -is [string] -and [MoveToIndexOption]::start -eq [MoveToIndexOption]$IndexOffset) 
+                    {
+                        $DataNode.MoveToStart($i) | Write-Output;
+                    }
+                    elseif ($IndexOffset -is [string] -and [MoveToIndexOption]::end -eq [MoveToIndexOption]$IndexOffset) 
+                    {
+                        $DataNode.MoveToEnd($i) | Write-Output;
+                    }
+                }
+                break;
+            }
+        }
+    }
+}
+
+Set-Alias -Name:mvdnx -Value:Move-toDnIndex
+Export-ModuleMember -Function:Move-toDnIndex
+Export-ModuleMember -Alias:mvdnx
+
 #endregion
 
 #region export
 
-<#
-    .SYNOPSIS
-    Imports FlatTree stored in a file.
-    Supported formats : psd1.
+function ConvertFrom-Dn {
+    [CmdletBinding(DefaultParameterSetName="Default")]
 
-    .PARAMETER FileInfo
-    Object returned by Get-ChildItem, Get-Item from FileProvider
-
-    .EXAMPLE
-    PS> $tree = gi .\test.psd1 | iptree ;
-
-
-#>
-function Import-Tree {
-    [CmdletBinding()]
     param (
-        [Parameter(ValueFromPipeline = $true)]
-        [System.IO.FileInfo] $FileInfo
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] 
+        [ValidateScript({ $_ -is [DataNode.Core.DataNode] -or $_ -is [DataNode.Core.Item] ;})]
+        [object] $DnObject,
+
+        [Alias('AsDct', 'Dct')]
+        [switch] $AsDictionary,
+
+        [Alias('Hash')]
+        [switch] $AsHashtable
     )
 
-    [string] $ext = $FileInfo.Extension;
-    switch ($ext) {
-            { $_ -eq ("." + [FileFormat]::psd1) } { 
-                [hashtable] $tree = Import-PowerShellDataFile -Path:($FileInfo.FullName) -SkipLimitCheck ;
-                break; 
-            }
-            default { throw "File format '$ext' not supported." }
+    begin {
     }
-    $root = Get-Node -Tree:$tree -PatternPath:'0';
-    if (-not $root) { throw "Root not found." }
-    if ($root -isnot [hashtable]) { throw "Multiple nodes found for the path." }
-
-    Set-AttributeValue -Node:$root -Key:([SysAttrKey]::FilePath) -V:($FileInfo.FullName) -System;
-    return $tree;
-}
-
-Set-Alias -Name:iptree -Value:Import-Tree
-Export-ModuleMember -Function:Import-Tree
-Export-ModuleMember -Alias:iptree
-
-function Get-ValuePsd1 {
-    param (
-        [Parameter(Mandatory = $false)] [object] $value
-    )
-
-    if ($value -is [string]) { $formatted = "'$($value)'"; }
-    elseif ($value -is [boolean]) { $formatted = $value ? "`$true" : "`$false"; }
-    elseif ($null -eq $value) { $formatted = "`$null"; }
-    else { $formatted = $value; }
-
-    return $formatted;
-}
-
-function Get-AttributeLinesPsd1 {
-    param (
-        [Parameter(Mandatory = $true)] [hashtable] $attr,
-        [Parameter(Mandatory = $false)] [int] $offset = 0
-    )
-
-    $outputLines = New-Object 'System.Collections.Generic.List[string]';
-    $attrLines = New-Object 'System.Collections.Generic.List[string]';
-
-    $keys = ($attr.Keys | Sort-Object);
-
-    foreach ($key in $keys) 
-    {
-        if ($null -eq $attr[$key]) { continue; } 
-        $attrLines.Add("$("`t" * $offset)`t'${key}' = $(Get-ValuePsd1 -value:($attr[$key]));"); 
-    }
-
-    if ($attrLines.Count -eq 0) {
-        $outputLines.Add("@{};");
-    }
-    else {
-        $outputLines.Add("$("`t" * $offset)@{");
-        $outputLines.AddRange($attrLines);
-        $outputLines.Add("$("`t" * $offset)};");        
-    }
-
-    return ,$outputLines;
-}
-
-function Get-NodeLinesPsd1 {
-    param (
-        [Parameter(Mandatory = $true)] [hashtable] $Node,
-        [Parameter(Mandatory = $false)] [int] $offset = 0
-    )
-
-    $output = New-Object 'System.Collections.Generic.List[string]';
-    $output.Add("$("`t" * $offset)@{");
-
-    $lines = (Get-AttributeLinesPsd1 -attr:($Node[$SA]) -offset:($offset + 1));
-    if ($lines.Count -eq 1) { $output.Add("$("`t" * $offset)'${SA}' = " + $lines[0]); }
-    else { 
-        $output.Add("$("`t" * $offset)'${SA}' = ");
-        $output.AddRange($lines); 
-    }
-
-    $lines = (Get-AttributeLinesPsd1 -attr:($Node[$A]) -offset:($offset + 1));
-    if ($lines.Count -eq 1) { $output.Add("$("`t" * $offset)'${A}' = " + $lines[0]); }
-    else { 
-        $output.Add("$("`t" * $offset)'${A}' = ");
-        $output.AddRange($lines); 
-    }
-
-    $output.Add("$("`t" * $offset)};");
-
-    return ,$output;
-}
-
-function Get-TreeContentPsd1 {
-    param (
-        [Parameter(Mandatory = $true)] [hashtable] $tree
-    )
-
-    $output = New-Object 'System.Collections.Generic.List[string]';
-    $output.Add("@{");
-
-    [string[]] $keys = $tree.Keys | Sort-Object;
-    foreach ($key in $keys) 
-    {
-        $output.Add("`t'${key}' =");
-        $output.AddRange((Get-NodeLinesPsd1 -Node:($tree[$key]) -offset:2 ));
-    }
-
-    $output.Add("};");
-
-    return $output.ToArray() -join "`n";
-}
-
-<#
-    .SYNOPSIS
-    Exports FlatTree to the file.
-    Supported formats : psd1.
-
-    .PARAMETER Tree
-    Hashtable comtaining FlatTree.
-
-    .PARAMETER Path
-    Path in a FileSystem provider.
-
-    .EXAMPLE
-    PS> $tree = gi .\test.psd1 | iptree ;
-    PS> $tree | eptree -F:"./test-copy.psd1"    #   creating a copy, it's not the same as cp because file path is stored in root node
-
-#>
-function Export-Tree {
-    [CmdletBinding()]
-    param (
-        [Parameter(ValueFromPipeline = $true)] 
-        [hashtable] $Tree,
-
-        [Parameter(Mandatory = $false)] [string] $FilePath
-    )
-
-    Process {
-        $root = Get-Node -Tree:$Tree -PatternPath:'0';
-        if (-not $root) { throw "Root not found." }
-        if ($root -isnot [hashtable]) { throw "Multiple nodes found for the path." }
-
-        if ( -not $FilePath) { 
-            $FilePath = (Get-AttributeValue -Node:$root -Key:([SysAttrKey]::FilePath) -System) 
+    
+    process {
+        If ($DnObject) {
+            switch ($PSCmdlet.ParameterSetName) {
+                'Default' {
+                    if ($DnObject -is [DataNode.Core.Item]) {
+                        if ($AsDictionary) {
+                            $item = [DataNode.Core.Item]$DnObject;
+                            return $item.ToDictionary();                            
+                        }
+                        if ($AsHashtable) {
+                            $item = [DataNode.Core.Item]$DnObject;
+                            $hash = @{};
+                            foreach ($attr in $item.GetAll()) {
+                                $hash[$attr.Name] = [DataNode.Core.DnValue]::ToObjectValue($attr.Value);
+                            }
+                            return $hash;
+                        }
+                    }
+                    if ($DnObject -is [DataNode.Core.DataNode]) {
+                        if ($AsDictionary) {
+                            $dn = [DataNode.Core.DataNode]$DnObject;
+                            return $dn.ToDictionary();                            
+                        }
+                        if ($AsHashtable) {
+                            $dn = [DataNode.Core.DataNode]$DnObject;
+                            $hash = @{};
+                            foreach ($item in $dn.GetAll()) {
+                                $itemHash = @{};
+                                foreach ($attr in $item.GetAll()) {
+                                    $itemHash[$attr.Name] = [DataNode.Core.DnValue]::ToObjectValue($attr.Value);
+                                }                                
+                                $hash[$item.Key] = $itemHash;
+                            }
+                            return $hash;
+                        }
+                    }
+                    break;
+                }
+            }                 
         }
-        if (-not $FilePath) { throw "File Path not specified." }
+    }
 
-        [string] $fullPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FilePath);
-        Set-AttributeValue -Node:$root -Key:([SysAttrKey]::FilePath) -Value:$fullPath -System
-
-        [string] $ext = [System.IO.Path]::GetExtension($FilePath);
-
-        switch ($ext) {
-            { $_ -eq ("." + [FileFormat]::psd1) } { 
-                [string] $content = Get-TreeContentPsd1 -Tree:$Tree;
-                break; 
-            }
-            default { throw "File format '$ext' not supported." }
-        }
-
-        Set-Content -Path:$FilePath -Value:$content -Encoding UTF8 -Force;
-        Get-Item -Path:$FilePath;           
+    end {
     }
 }
 
-Set-Alias -Name:eptree -Value:Export-Tree
-Export-ModuleMember -Function:Export-Tree
-Export-ModuleMember -Alias:eptree
+Set-Alias -Name:cvdn -Value:ConvertFrom-Dn
+Export-ModuleMember -Function:ConvertFrom-Dn
+Export-ModuleMember -Alias:cvdn
+
 #endregion
