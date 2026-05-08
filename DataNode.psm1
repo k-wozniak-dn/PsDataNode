@@ -650,12 +650,12 @@ Export-ModuleMember -Alias:mvdnx
 
 #region export
 
-function ConvertFrom-Dn {
+function ConvertFrom-DnItem {
     [CmdletBinding(DefaultParameterSetName="Default")]
 
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)] 
-        [ValidateScript({ $_ -is [DataNode.Core.DataNode] -or $_ -is [DataNode.Core.Item] ;})]
+        [ValidateScript({ $_ -is [DataNode.Core.Item] ;})]
         [object] $DnObject,
 
         [Parameter(ParameterSetName = 'Dictionary')]
@@ -674,10 +674,52 @@ function ConvertFrom-Dn {
         If ($DnObject) {
             switch ($PSCmdlet.ParameterSetName) {
                 'Dictionary' {
-                    if ($DnObject -is [DataNode.Core.Item]) {
-                        $item = [DataNode.Core.Item]$DnObject;
-                        return $item.ToDictionary();                            
+                    $item = [DataNode.Core.Item]$DnObject;
+                    return $item.ToDictionary();                            
+                    break;
+                }
+                'Hashtable' {
+                    $item = [DataNode.Core.Item]$DnObject;
+                    $hash = @{};
+                    foreach ($attr in $item.GetAll()) {
+                        $hash[$attr.Name] = [DataNode.Core.DnValue]::ToObjectValue($attr.Value);
                     }
+                    return $hash;
+                    break;
+                }
+            }                 
+        }
+    }
+}
+
+Set-Alias -Name:cvdni -Value:ConvertFrom-DnItem
+Export-ModuleMember -Function:ConvertFrom-DnItem
+Export-ModuleMember -Alias:cvdni
+
+function ConvertFrom-Dn {
+    [CmdletBinding(DefaultParameterSetName="Default")]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] 
+        [ValidateScript({ $_ -is [DataNode.Core.DataNode] ;})]
+        [object] $DnObject,
+
+        [Parameter(ParameterSetName = 'Dictionary')]
+        [Alias('AsDct', 'Dct')]
+        [switch] $AsDictionary,
+
+        [Parameter(ParameterSetName = 'Hashtable')]
+        [Alias('Hash')]
+        [switch] $AsHashtable
+    )
+
+    begin {
+    }
+    
+    process {
+        If ($DnObject) {
+            switch ($PSCmdlet.ParameterSetName) {
+                'Dictionary' {
                     if ($DnObject -is [DataNode.Core.DataNode]) {
                         $dn = [DataNode.Core.DataNode]$DnObject;
                         return $dn.ToDictionary();                            
@@ -685,26 +727,16 @@ function ConvertFrom-Dn {
                     break;
                 }
                 'Hashtable' {
-                    if ($DnObject -is [DataNode.Core.Item]) {
-                        $item = [DataNode.Core.Item]$DnObject;
-                        $hash = @{};
+                    $dn = [DataNode.Core.DataNode]$DnObject;
+                    $hash = @{};
+                    foreach ($item in $dn.GetAll()) {
+                        $itemHash = @{};
                         foreach ($attr in $item.GetAll()) {
-                            $hash[$attr.Name] = [DataNode.Core.DnValue]::ToObjectValue($attr.Value);
-                        }
-                        return $hash;
+                            $itemHash[$attr.Name] = [DataNode.Core.DnValue]::ToObjectValue($attr.Value);
+                        }                                
+                        $hash[$item.Key] = $itemHash;
                     }
-                    if ($DnObject -is [DataNode.Core.DataNode]) {
-                        $dn = [DataNode.Core.DataNode]$DnObject;
-                        $hash = @{};
-                        foreach ($item in $dn.GetAll()) {
-                            $itemHash = @{};
-                            foreach ($attr in $item.GetAll()) {
-                                $itemHash[$attr.Name] = [DataNode.Core.DnValue]::ToObjectValue($attr.Value);
-                            }                                
-                            $hash[$item.Key] = $itemHash;
-                        }
-                        return $hash;
-                    }
+                    return $hash;
                     break;
                 }
             }                 
@@ -715,6 +747,55 @@ function ConvertFrom-Dn {
 Set-Alias -Name:cvdn -Value:ConvertFrom-Dn
 Export-ModuleMember -Function:ConvertFrom-Dn
 Export-ModuleMember -Alias:cvdn
+
+function ConvertTo-DnItem {
+    [CmdletBinding(DefaultParameterSetName="Default")]
+
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)] 
+        [ValidateScript({ 
+            $_ -is [hashtable] -or 
+            $_ -is [System.Collections.Generic.Dictionary[string, object]] -or
+            $_ -is [string] ;})]
+        [object] $ImportObject,
+
+        [Parameter(ParameterSetName = 'Dictionary')]
+        [Alias('AsDct', 'Dct')]
+        [switch] $FromDictionary,
+
+        [Parameter(ParameterSetName = 'Hashtable')]
+        [Alias('Hash')]
+        [switch] $FromHashtable
+    )
+
+    begin {
+    }
+    
+    process {
+        If ($ImportObject) {
+            switch ($PSCmdlet.ParameterSetName) {
+                'Dictionary' {
+                    $import = [System.Collections.Generic.Dictionary[string, object]]$ImportObject;
+                    return [DataNode.Core.Item]::FromDictionary($import);
+                    break;
+                }
+                'Hashtable' {
+                    $itemHash = [hashtable]$ImportObject;
+                    $item = [System.Collections.Generic.Dictionary[string, object]]::new();
+                    foreach ($name in $itemHash.Keys) {
+                        $item[$name] = $itemHash[$name];
+                    }
+                    return [DataNode.Core.Item]::FromDictionary($item);
+                    break;
+                }
+            }                 
+        }
+    }
+}
+
+Set-Alias -Name:cv2dni -Value:ConvertTo-DnItem
+Export-ModuleMember -Function:ConvertTo-DnItem
+Export-ModuleMember -Alias:cv2dni
 
 function ConvertTo-Dn {
     [CmdletBinding(DefaultParameterSetName="Default")]
